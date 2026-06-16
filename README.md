@@ -125,8 +125,6 @@ FinalProject/
 - `complaints-*.json` (dataset)
 - `__pycache__/`, virtualenvs, IDE files
 
-Commit source code, templates, static assets, notebooks, scripts, and documentation.
 
-## License / course
 
-University machine learning final project — adjust license and attribution as required by your course.
+
