@@ -67,10 +67,11 @@ Open: `http://127.0.0.1:5000`
 
 ## Usage
 
-1. Choose **Product** or **Issue** classification.
-2. Enter complaint text, or click **Voice Input** to record and transcribe.
-3. Click **Analyze Complaint**.
-4. Read the **Final Ensemble Prediction** at the top, then compare individual model cards below.
+1. Choose **Product** or **Issue** classification, or click **Analyze Both**.
+2. Enter complaint text, pick a **sample complaint**, or click **Voice Input** to record and transcribe.
+3. Click **Analyze Complaint** (Ctrl+Enter) or **Analyze Both**.
+4. Read the **Final Ensemble Prediction** at the top; check the low-confidence banner if models disagree.
+5. Compare individual model cards below, or use **Download JSON** to export results.
 
 ## API
 

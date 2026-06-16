@@ -40,6 +40,20 @@
                                 <option value="issue">Issue Classification</option>
                             </select>
                         </div>
+                        <div class="sample-selection">
+                            <label for="sampleSelect" class="target-label">
+                                <span class="target-icon">📝</span>
+                                Try a sample complaint:
+                            </label>
+                            <select id="sampleSelect" class="target-select">
+                                <option value="">— Choose a sample —</option>
+                                <option value="credit_card">Credit card billing dispute</option>
+                                <option value="mortgage">Mortgage refinance delay</option>
+                                <option value="student_loan">Student loan credit reporting</option>
+                                <option value="duplicate_charge">Duplicate billing charge</option>
+                                <option value="unauthorized_debit">Unauthorized debit transactions</option>
+                            </select>
+                        </div>
                         <textarea 
                             id="complaintText" 
                             class="text-input" 
@@ -50,25 +64,20 @@
                             <span class="char-count">
                                 <span id="charCount">0</span> characters
                             </span>
-                            <button id="voiceBtn" class="btn btn-voice" title="Record complaint with microphone (Groq Whisper)">
-                                Voice Input
-                            </button>
-                            <button id="clearBtn" class="btn btn-secondary">Clear</button>
-                            <button id="predictBtn" class="btn btn-primary">
-                                <span class="btn-icon">🔍</span>
-                                Analyze Complaint
-                            </button>
+                            <div class="input-actions">
+                                <button id="voiceBtn" class="btn btn-voice" title="Record complaint with microphone (Groq Whisper)">
+                                    Voice Input
+                                </button>
+                                <button id="clearBtn" class="btn btn-secondary">Clear</button>
+                                <button id="predictBothBtn" class="btn btn-outline" title="Run product and issue classification on the same text">
+                                    Analyze Both
+                                </button>
+                                <button id="predictBtn" class="btn btn-primary">
+                                    <span class="btn-icon">🔍</span>
+                                    Analyze Complaint
+                                </button>
+                            </div>
                         </div>
-                        <!-- <div class="input-footer">
-                            <span class="char-count">
-                                <span id="charCount">0</span> characters
-                            </span>
-                            <button id="clearBtn" class="btn btn-secondary">Clear</button>
-                            <button id="predictBtn" class="btn btn-primary">
-                                <span class="btn-icon">🔍</span>
-                                Analyze Complaint
-                            </button>
-                        </div> -->
                     </div>
                 </div>
             </section>
@@ -86,18 +95,44 @@
                         <span class="card-icon">📊</span>
                         Prediction Results
                     </h2>
-                    <span id="timestamp" class="timestamp"></span>
-                </div>
-
-                <div id="ensembleSection" class="ensemble-section" style="display: none;">
-                    <div id="ensembleCard" class="ensemble-card">
-                        <!-- Final ensemble prediction rendered here -->
+                    <div class="results-header-actions">
+                        <span id="timestamp" class="timestamp"></span>
+                        <button id="downloadBtn" class="btn btn-secondary btn-download" style="display: none;">
+                            Download JSON
+                        </button>
                     </div>
                 </div>
 
-                <h3 class="individual-models-title">Individual Model Predictions</h3>
-                <div id="resultsContainer" class="results-container">
-                    <!-- Results will be dynamically inserted here -->
+                <div id="uncertaintyBanner" class="uncertainty-banner" style="display: none;" role="alert"></div>
+
+                <div id="singleResultsBlock">
+                    <div id="ensembleSection" class="ensemble-section" style="display: none;">
+                        <div id="ensembleCard" class="ensemble-card">
+                            <!-- Final ensemble prediction rendered here -->
+                        </div>
+                    </div>
+
+                    <h3 class="individual-models-title">Individual Model Predictions</h3>
+                    <div id="resultsContainer" class="results-container">
+                        <!-- Results will be dynamically inserted here -->
+                    </div>
+                </div>
+
+                <div id="dualResultsBlock" class="dual-results-block" style="display: none;">
+                    <div class="dual-results-grid">
+                        <div class="dual-target-column">
+                            <h3 class="dual-target-title">Product Classification</h3>
+                            <div id="productEnsembleCard" class="ensemble-card dual-ensemble-card"></div>
+                            <h4 class="individual-models-subtitle">Individual Models</h4>
+                            <div id="productResultsContainer" class="results-container"></div>
+                        </div>
+                        <div class="dual-target-column">
+                            <h3 class="dual-target-title">Issue Classification</h3>
+                            <div id="issueEnsembleCard" class="ensemble-card dual-ensemble-card"></div>
+                            <h4 class="individual-models-subtitle">Individual Models</h4>
+                            <div id="issueResultsContainer" class="results-container"></div>
+                        </div>
+                    </div>
                 </div>
             </section>
 

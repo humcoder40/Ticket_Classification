@@ -5,19 +5,55 @@ const complaintTextarea = document.getElementById('complaintText');
 const charCount = document.getElementById('charCount');
 const clearBtn = document.getElementById('clearBtn');
 const predictBtn = document.getElementById('predictBtn');
+const predictBothBtn = document.getElementById('predictBothBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const sampleSelect = document.getElementById('sampleSelect');
+const targetSelect = document.getElementById('targetSelect');
 const loadingIndicator = document.getElementById('loadingIndicator');
 const resultsSection = document.getElementById('resultsSection');
+const singleResultsBlock = document.getElementById('singleResultsBlock');
+const dualResultsBlock = document.getElementById('dualResultsBlock');
 const ensembleSection = document.getElementById('ensembleSection');
 const ensembleCard = document.getElementById('ensembleCard');
 const resultsContainer = document.getElementById('resultsContainer');
+const productEnsembleCard = document.getElementById('productEnsembleCard');
+const productResultsContainer = document.getElementById('productResultsContainer');
+const issueEnsembleCard = document.getElementById('issueEnsembleCard');
+const issueResultsContainer = document.getElementById('issueResultsContainer');
+const uncertaintyBanner = document.getElementById('uncertaintyBanner');
 const timestamp = document.getElementById('timestamp');
 const modelStatus = document.getElementById('modelStatus');
 const voiceBtn = document.getElementById('voiceBtn');
+
 let mediaRecorder = null;
 let mediaStream = null;
 let audioChunks = [];
 let isRecording = false;
 let isTranscribing = false;
+let lastExportPayload = null;
+
+const SAMPLE_COMPLAINTS = {
+    credit_card: {
+        target: 'product',
+        text: `I have been trying to resolve an issue with my credit card statement for over two months. The charges are incorrect and I have been charged late fees and interest that I should not owe. I called customer service multiple times and was told the dispute was opened, but nothing has changed on my account. I am requesting a full review of the billing cycle and removal of all improper fees.`,
+    },
+    mortgage: {
+        target: 'product',
+        text: `We applied for a mortgage refinance with our lender eight weeks ago and were told closing would happen within 30 days. Since then we have submitted the same documents three times and still have no clear timeline. Our rate lock expires soon and we may lose thousands of dollars because of the delay. Please assign someone who can explain what is missing and when we can expect to close.`,
+    },
+    student_loan: {
+        target: 'issue',
+        text: `My student loan servicer reported my account as delinquent to the credit bureaus even though I was in an approved income-driven repayment plan and made every payment on time. This incorrect reporting dropped my credit score by nearly 80 points and affected my ability to rent an apartment. I need the servicer to correct the credit reporting immediately and provide documentation that the account is in good standing.`,
+    },
+    duplicate_charge: {
+        target: 'issue',
+        text: `I was charged twice for the same monthly subscription on my checking account. I only authorized one payment but see duplicate withdrawals on the same day for identical amounts. I contacted the company by email and received no response. I want a refund for the duplicate charge and confirmation that this will not happen again next billing cycle.`,
+    },
+    unauthorized_debit: {
+        target: 'product',
+        text: `There are several unauthorized debit transactions on my checking account from merchants I do not recognize. I did not share my card information with anyone and I believe my account may have been compromised. I reported the transactions to the bank but some were denied for reimbursement. I need all fraudulent charges reversed and a new debit card issued as soon as possible.`,
+    },
+};
 
 // ============================================
 // Initialize
@@ -26,17 +62,24 @@ document.addEventListener('DOMContentLoaded', () => {
     updateCharCount();
     loadModelStatus();
     initVoiceInput();
-    
-    // Update char count as user types
-    complaintTextarea.addEventListener('input', updateCharCount);
-    
-    // Clear button
+    initSampleSelect();
+
+    complaintTextarea.addEventListener('input', () => {
+        updateCharCount();
+        if (sampleSelect && sampleSelect.value) {
+            sampleSelect.value = '';
+        }
+    });
+
     clearBtn.addEventListener('click', clearInput);
-    
-    // Predict button
     predictBtn.addEventListener('click', handlePredict);
-    
-    // Enter key shortcut (Ctrl+Enter to predict)
+    if (predictBothBtn) {
+        predictBothBtn.addEventListener('click', handlePredictBoth);
+    }
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', downloadResults);
+    }
+
     complaintTextarea.addEventListener('keydown', (e) => {
         if (e.ctrlKey && e.key === 'Enter') {
             handlePredict();
@@ -44,14 +87,34 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+function initSampleSelect() {
+    if (!sampleSelect) {
+        return;
+    }
+
+    sampleSelect.addEventListener('change', () => {
+        const key = sampleSelect.value;
+        if (!key || !SAMPLE_COMPLAINTS[key]) {
+            return;
+        }
+
+        const sample = SAMPLE_COMPLAINTS[key];
+        complaintTextarea.value = sample.text;
+        if (targetSelect && sample.target) {
+            targetSelect.value = sample.target;
+        }
+        updateCharCount();
+        complaintTextarea.focus();
+    });
+}
+
 // ============================================
 // Character Count
 // ============================================
 function updateCharCount() {
     const count = complaintTextarea.value.length;
     charCount.textContent = count.toLocaleString();
-    
-    // Change color based on length
+
     if (count > 5000) {
         charCount.style.color = 'var(--warning-color)';
     } else if (count > 2000) {
@@ -66,53 +129,99 @@ function updateCharCount() {
 // ============================================
 function clearInput() {
     complaintTextarea.value = '';
+    if (sampleSelect) {
+        sampleSelect.value = '';
+    }
     updateCharCount();
-    resultsSection.style.display = 'none';
+    hideResults();
+    lastExportPayload = null;
+    updateDownloadButton();
     complaintTextarea.focus();
+}
+
+function validateComplaintText() {
+    const text = complaintTextarea.value.trim();
+
+    if (!text) {
+        showError('Please enter complaint text before analyzing.');
+        return null;
+    }
+
+    if (text.length < 10) {
+        showError('Please enter at least 10 characters for accurate prediction.');
+        return null;
+    }
+
+    return text;
+}
+
+// ============================================
+// Prediction API
+// ============================================
+async function fetchPrediction(text, target) {
+    const response = await fetch('/predict', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text, target }),
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+        throw new Error(data.error || 'Prediction failed. Please try again.');
+    }
+
+    return data;
 }
 
 // ============================================
 // Handle Prediction
 // ============================================
 async function handlePredict() {
-    const text = complaintTextarea.value.trim();
-    const targetSelect = document.getElementById('targetSelect');
-    const target = targetSelect ? targetSelect.value : 'product';
-    
+    const text = validateComplaintText();
     if (!text) {
-        showError('Please enter complaint text before analyzing.');
         return;
     }
-    
-    if (text.length < 10) {
-        showError('Please enter at least 10 characters for accurate prediction.');
-        return;
-    }
-    
-    // Show loading
-    showLoading();
+
+    const target = targetSelect ? targetSelect.value : 'product';
+
+    showLoading('Analyzing complaint with all models (including BERT)...');
     hideResults();
     disableButtons();
-    
+
     try {
-        const response = await fetch('/predict', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ text: text, target: target })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            displayResults(data.results, data.timestamp, data.target, data.final_ensemble_prediction);
-        } else {
-            showError(data.error || 'Prediction failed. Please try again.');
-        }
+        const data = await fetchPrediction(text, target);
+        displaySingleResults(data);
     } catch (error) {
         console.error('Error:', error);
-        showError('Network error. Please check your connection and try again.');
+        showError(error.message || 'Network error. Please check your connection and try again.');
+    } finally {
+        hideLoading();
+        enableButtons();
+    }
+}
+
+async function handlePredictBoth() {
+    const text = validateComplaintText();
+    if (!text) {
+        return;
+    }
+
+    showLoading('Analyzing product and issue classification (all models)...');
+    hideResults();
+    disableButtons();
+
+    try {
+        const [productData, issueData] = await Promise.all([
+            fetchPrediction(text, 'product'),
+            fetchPrediction(text, 'issue'),
+        ]);
+        displayDualResults(text, productData, issueData);
+    } catch (error) {
+        console.error('Error:', error);
+        showError(error.message || 'Network error. Please check your connection and try again.');
     } finally {
         hideLoading();
         enableButtons();
@@ -122,60 +231,114 @@ async function handlePredict() {
 // ============================================
 // Display Results
 // ============================================
-function displayResults(results, ts, target = 'product', finalEnsemble = null) {
-    resultsContainer.innerHTML = '';
-    
-    // Update timestamp and target info
+function displaySingleResults(data) {
+    singleResultsBlock.style.display = 'block';
+    dualResultsBlock.style.display = 'none';
+
+    const target = data.target || 'product';
     const targetLabel = target === 'product' ? 'Product Classification' : 'Issue Classification';
-    if (ts) {
-        timestamp.textContent = `Last updated: ${ts} | ${targetLabel}`;
+
+    if (data.timestamp) {
+        timestamp.textContent = `Last updated: ${data.timestamp} | ${targetLabel}`;
     }
-    
-    // Update results title to show target
+
     const resultsTitle = document.querySelector('.results-title');
     if (resultsTitle) {
         resultsTitle.innerHTML = `<span class="card-icon">📊</span> Prediction Results - ${targetLabel}`;
     }
 
-    if (finalEnsemble) {
-        displayFinalEnsemble(finalEnsemble);
+    if (data.final_ensemble_prediction) {
+        renderEnsembleCard(ensembleCard, data.final_ensemble_prediction);
         ensembleSection.style.display = 'block';
     } else {
         ensembleSection.style.display = 'none';
         ensembleCard.innerHTML = '';
     }
-    
-    // Create result cards for each model
-    for (const [modelName, result] of Object.entries(results)) {
-        if (result.error) {
-            createErrorCard(modelName, result.error);
-        } else {
-            createResultCard(modelName, result);
-        }
-    }
-    
-    // Show results section
+
+    renderModelCards(resultsContainer, data.results);
+    updateUncertaintyBanner([data.final_ensemble_prediction]);
+
+    lastExportPayload = {
+        mode: 'single',
+        timestamp: data.timestamp,
+        text: complaintTextarea.value.trim(),
+        target,
+        final_ensemble_prediction: data.final_ensemble_prediction,
+        results: data.results,
+    };
+    updateDownloadButton();
+
     resultsSection.style.display = 'block';
-    
-    // Smooth scroll to results
-    setTimeout(() => {
-        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
-    
-    // Animate confidence bars
-    setTimeout(() => {
-        animateConfidenceBars();
-    }, 200);
+    scrollToResults();
 }
 
-function displayFinalEnsemble(ensemble) {
+function displayDualResults(text, productData, issueData) {
+    singleResultsBlock.style.display = 'none';
+    dualResultsBlock.style.display = 'block';
+    ensembleSection.style.display = 'none';
+
+    const ts = productData.timestamp || issueData.timestamp;
+    if (ts) {
+        timestamp.textContent = `Last updated: ${ts} | Product + Issue`;
+    }
+
+    const resultsTitle = document.querySelector('.results-title');
+    if (resultsTitle) {
+        resultsTitle.innerHTML = '<span class="card-icon">📊</span> Prediction Results - Product & Issue';
+    }
+
+    renderEnsembleCard(productEnsembleCard, productData.final_ensemble_prediction);
+    renderEnsembleCard(issueEnsembleCard, issueData.final_ensemble_prediction);
+    renderModelCards(productResultsContainer, productData.results);
+    renderModelCards(issueResultsContainer, issueData.results);
+
+    updateUncertaintyBanner([
+        productData.final_ensemble_prediction,
+        issueData.final_ensemble_prediction,
+    ]);
+
+    lastExportPayload = {
+        mode: 'both',
+        timestamp: ts,
+        text,
+        product: {
+            target: 'product',
+            final_ensemble_prediction: productData.final_ensemble_prediction,
+            results: productData.results,
+        },
+        issue: {
+            target: 'issue',
+            final_ensemble_prediction: issueData.final_ensemble_prediction,
+            results: issueData.results,
+        },
+    };
+    updateDownloadButton();
+
+    resultsSection.style.display = 'block';
+    scrollToResults();
+}
+
+function renderEnsembleCard(container, ensemble) {
+    if (!container) {
+        return;
+    }
+
+    if (!ensemble) {
+        container.innerHTML = '<p class="ensemble-empty">No ensemble prediction available.</p>';
+        return;
+    }
+
+    container.innerHTML = buildEnsembleCardHtml(ensemble);
+}
+
+function buildEnsembleCardHtml(ensemble) {
     const confidencePercent = (ensemble.confidence * 100).toFixed(1);
     const majority = ensemble.majority_vote || {};
     const majorityPercent = majority.total
         ? ((majority.votes / majority.total) * 100).toFixed(0)
         : '0';
 
-    ensembleCard.innerHTML = `
+    return `
         <div class="ensemble-badge">Final Ensemble Prediction</div>
         <div class="ensemble-method">${escapeHtml(ensemble.method === 'soft_voting' ? 'Soft voting (averaged confidence scores)' : ensemble.method)}</div>
         <div class="ensemble-prediction-label">Predicted Category</div>
@@ -205,15 +368,87 @@ function displayFinalEnsemble(ensemble) {
     `;
 }
 
+function renderModelCards(container, results) {
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = '';
+
+    for (const [modelName, result] of Object.entries(results || {})) {
+        if (result.error) {
+            createErrorCard(container, modelName, result.error);
+        } else {
+            createResultCard(container, modelName, result);
+        }
+    }
+}
+
+function updateUncertaintyBanner(ensembles) {
+    if (!uncertaintyBanner) {
+        return;
+    }
+
+    const warnings = (ensembles || [])
+        .filter(Boolean)
+        .map(getUncertaintyMessage)
+        .filter(Boolean);
+
+    if (warnings.length === 0) {
+        uncertaintyBanner.style.display = 'none';
+        uncertaintyBanner.innerHTML = '';
+        return;
+    }
+
+    uncertaintyBanner.style.display = 'block';
+    uncertaintyBanner.innerHTML = `
+        <div class="uncertainty-title">Low confidence — review recommended</div>
+        <ul class="uncertainty-list">
+            ${warnings.map((msg) => `<li>${escapeHtml(msg)}</li>`).join('')}
+        </ul>
+    `;
+}
+
+function getUncertaintyMessage(ensemble) {
+    if (!ensemble) {
+        return null;
+    }
+
+    const reasons = [];
+    const confidence = ensemble.confidence ?? 0;
+    const majority = ensemble.majority_vote || {};
+
+    if (confidence < 0.5) {
+        reasons.push(`ensemble confidence is ${(confidence * 100).toFixed(1)}%`);
+    }
+
+    if (majority.total && majority.votes < 4) {
+        reasons.push(`only ${majority.votes}/${majority.total} models agreed on "${ensemble.prediction}"`);
+    }
+
+    if (reasons.length === 0) {
+        return null;
+    }
+
+    return `${ensemble.prediction}: ${reasons.join('; ')}`;
+}
+
+function scrollToResults() {
+    setTimeout(() => {
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        animateConfidenceBars();
+    }, 100);
+}
+
 // ============================================
 // Create Result Card
 // ============================================
-function createResultCard(modelName, result) {
+function createResultCard(container, modelName, result) {
     const card = document.createElement('div');
     card.className = 'result-card';
-    
+
     const confidencePercent = (result.confidence * 100).toFixed(1);
-    
+
     card.innerHTML = `
         <div class="model-name">
             <span>🤖</span>
@@ -239,29 +474,56 @@ function createResultCard(modelName, result) {
         </div>
         ` : ''}
     `;
-    
-    resultsContainer.appendChild(card);
+
+    container.appendChild(card);
 }
 
-// ============================================
-// Create Error Card
-// ============================================
-function createErrorCard(modelName, error) {
+function createErrorCard(container, modelName, error) {
     const card = document.createElement('div');
     card.className = 'result-card';
     card.style.borderLeftColor = 'var(--danger-color)';
-    
+
     card.innerHTML = `
         <div class="model-name" style="color: var(--danger-color);">
             <span>⚠️</span>
             ${modelName}
         </div>
-        <div class="error-message">
+        <div class="model-error-text">
             ${escapeHtml(error)}
         </div>
     `;
-    
-    resultsContainer.appendChild(card);
+
+    container.appendChild(card);
+}
+
+// ============================================
+// Download Results
+// ============================================
+function updateDownloadButton() {
+    if (!downloadBtn) {
+        return;
+    }
+    downloadBtn.style.display = lastExportPayload ? 'inline-flex' : 'none';
+}
+
+function downloadResults() {
+    if (!lastExportPayload) {
+        showError('No results to download yet. Run an analysis first.');
+        return;
+    }
+
+    const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+    const blob = new Blob([JSON.stringify(lastExportPayload, null, 2)], {
+        type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `complaint-prediction-${stamp}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
 }
 
 // ============================================
@@ -269,7 +531,7 @@ function createErrorCard(modelName, error) {
 // ============================================
 function animateConfidenceBars() {
     const bars = document.querySelectorAll('.confidence-fill');
-    bars.forEach(bar => {
+    bars.forEach((bar) => {
         const width = bar.style.width;
         bar.style.width = '0%';
         setTimeout(() => {
@@ -283,38 +545,66 @@ function hideResults() {
     if (ensembleSection) {
         ensembleSection.style.display = 'none';
     }
+    if (uncertaintyBanner) {
+        uncertaintyBanner.style.display = 'none';
+        uncertaintyBanner.innerHTML = '';
+    }
+    if (downloadBtn) {
+        downloadBtn.style.display = 'none';
+    }
 }
 
 // ============================================
 // Loading States
 // ============================================
-function showLoading() {
-    loadingIndicator.style.display = 'block';
-    loadingIndicator.scrollIntoView({ behavior: 'smooth', block: 'center' });
+function showLoading(message) {
+    if (loadingIndicator) {
+        const textNode = loadingIndicator.querySelector('p');
+        if (textNode && message) {
+            textNode.textContent = message;
+        }
+        loadingIndicator.style.display = 'block';
+        loadingIndicator.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
 }
 
 function hideLoading() {
-    loadingIndicator.style.display = 'none';
-}
-
-function showResults() {
-    resultsSection.style.display = 'block';
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'none';
+    }
 }
 
 function disableButtons() {
     predictBtn.disabled = true;
     clearBtn.disabled = true;
-    if (voiceBtn && !isRecording && !isTranscribing) {
+    if (predictBothBtn) {
+        predictBothBtn.disabled = true;
+    }
+    if (sampleSelect) {
+        sampleSelect.disabled = true;
+    }
+    if (voiceBtn && !isRecording) {
         voiceBtn.disabled = true;
     }
 }
 
 function enableButtons() {
+    if (isRecording || isTranscribing) {
+        return;
+    }
+
     predictBtn.disabled = false;
     clearBtn.disabled = false;
-    if (voiceBtn && !isRecording && !isTranscribing) {
+    if (predictBothBtn) {
+        predictBothBtn.disabled = false;
+    }
+    if (sampleSelect) {
+        sampleSelect.disabled = false;
+    }
+    if (voiceBtn) {
         voiceBtn.disabled = false;
     }
+    loadModelStatus();
 }
 
 // ============================================
@@ -324,7 +614,7 @@ async function loadModelStatus() {
     try {
         const response = await fetch('/models/status');
         const data = await response.json();
-        
+
         displayModelStatus(data);
     } catch (error) {
         console.error('Error loading model status:', error);
@@ -339,9 +629,8 @@ async function loadModelStatus() {
 
 function displayModelStatus(data) {
     let statusHtml = '';
-    
+
     if (data.targets_status) {
-        // New format with multiple targets
         for (const [target, status] of Object.entries(data.targets_status)) {
             const targetLabel = target === 'product' ? 'Product' : 'Issue';
             statusHtml += `
@@ -354,20 +643,20 @@ function displayModelStatus(data) {
                     <div class="status-item">
                         <span class="status-label">Vectorizer</span>
                         <span class="status-badge ${status.vectorizer_loaded ? 'success' : 'error'}">
-                            ${status.vectorizer_loaded ? '✓ Loaded' : '✗ Not Loaded'}
+                            ${status.vectorizer_loaded ? 'Loaded' : 'Not Loaded'}
                         </span>
                     </div>
                     <div class="status-item">
                         <span class="status-label">Label Encoder</span>
                         <span class="status-badge ${status.label_encoder_loaded ? 'success' : 'error'}">
-                            ${status.label_encoder_loaded ? '✓ Loaded' : '✗ Not Loaded'}
+                            ${status.label_encoder_loaded ? 'Loaded' : 'Not Loaded'}
                         </span>
                     </div>
                     ${status.bert_loaded !== undefined ? `
                     <div class="status-item">
                         <span class="status-label">BERT Model</span>
                         <span class="status-badge ${status.bert_loaded ? 'success' : 'error'}">
-                            ${status.bert_loaded ? '✓ Loaded' : '✗ Not Loaded'}
+                            ${status.bert_loaded ? 'Loaded' : 'Not Loaded'}
                         </span>
                     </div>
                     ` : ''}
@@ -375,7 +664,7 @@ function displayModelStatus(data) {
                     <div class="status-item" style="flex-direction: column; align-items: flex-start; gap: 10px;">
                         <span class="status-label">Available Models:</span>
                         <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                            ${status.model_names.map(name => {
+                            ${status.model_names.map((name) => {
                                 const isBert = name === 'BERT';
                                 return `<span class="status-badge ${isBert ? 'info' : 'success'}" style="${isBert ? 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);' : ''}">${escapeHtml(name)}</span>`;
                             }).join('')}
@@ -385,36 +674,6 @@ function displayModelStatus(data) {
                 </div>
             `;
         }
-    } else {
-        // Fallback to old format
-        statusHtml = `
-            <div class="status-item">
-                <span class="status-label">Models Loaded</span>
-                <span class="status-value">${data.models_loaded || 0}</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">Vectorizer</span>
-                <span class="status-badge ${data.vectorizer_loaded ? 'success' : 'error'}">
-                    ${data.vectorizer_loaded ? '✓ Loaded' : '✗ Not Loaded'}
-                </span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">Label Encoder</span>
-                <span class="status-badge ${data.label_encoder_loaded ? 'success' : 'error'}">
-                    ${data.label_encoder_loaded ? '✓ Loaded' : '✗ Not Loaded'}
-                </span>
-            </div>
-            ${data.model_names && data.model_names.length > 0 ? `
-            <div class="status-item" style="flex-direction: column; align-items: flex-start; gap: 10px;">
-                <span class="status-label">Available Models:</span>
-                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                    ${data.model_names.map(name => `
-                        <span class="status-badge success">${escapeHtml(name)}</span>
-                    `).join('')}
-                </div>
-            </div>
-            ` : ''}
-        `;
     }
 
     if (data.transcription) {
@@ -428,8 +687,8 @@ function displayModelStatus(data) {
                 </span>
             </div>
         `;
-        if (voiceBtn) {
-            voiceBtn.disabled = !voiceAvailable || isRecording || isTranscribing;
+        if (voiceBtn && !isRecording && !isTranscribing) {
+            voiceBtn.disabled = !voiceAvailable;
             voiceBtn.title = voiceAvailable
                 ? 'Record complaint with microphone (Groq Whisper)'
                 : 'Set GROQ_API_KEY in .env to enable voice input';
@@ -443,23 +702,17 @@ function displayModelStatus(data) {
 // Error Display
 // ============================================
 function showError(message) {
-    // Remove existing error messages
-    const existingErrors = document.querySelectorAll('.error-message');
-    existingErrors.forEach(err => err.remove());
-    
-    // Create error message
+    const existingToasts = document.querySelectorAll('.toast-error');
+    existingToasts.forEach((err) => err.remove());
+
     const errorDiv = document.createElement('div');
-    errorDiv.className = 'error-message';
+    errorDiv.className = 'toast-error';
     errorDiv.textContent = message;
-    
-    // Insert after input section
+
     const inputSection = document.querySelector('.input-section');
     inputSection.insertAdjacentElement('afterend', errorDiv);
-    
-    // Scroll to error
     errorDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    
-    // Remove after 5 seconds
+
     setTimeout(() => {
         errorDiv.remove();
     }, 5000);
@@ -526,6 +779,7 @@ async function startVoiceRecording() {
             cleanupMediaStream();
             isRecording = false;
             resetVoiceButton();
+            enableButtons();
             showError('Recording failed. Please try again.');
         };
 
@@ -540,11 +794,14 @@ async function startVoiceRecording() {
         voiceBtn.textContent = 'Stop Recording';
         voiceBtn.classList.add('recording');
         voiceBtn.title = 'Click to stop and transcribe';
+        disableButtons();
+        voiceBtn.disabled = false;
     } catch (error) {
         console.error('Microphone error:', error);
         cleanupMediaStream();
         isRecording = false;
         resetVoiceButton();
+        enableButtons();
         showError('Microphone access denied or unavailable.');
     }
 }
@@ -559,6 +816,11 @@ function stopVoiceRecording() {
     voiceBtn.textContent = 'Transcribing...';
     voiceBtn.disabled = true;
     voiceBtn.classList.add('transcribing');
+    isTranscribing = true;
+    predictBtn.disabled = true;
+    if (predictBothBtn) {
+        predictBothBtn.disabled = true;
+    }
     mediaRecorder.stop();
 }
 
@@ -609,6 +871,9 @@ async function transcribeVoiceRecording(mimeType) {
         if (data.success && data.text) {
             const existing = complaintTextarea.value.trim();
             complaintTextarea.value = existing ? `${existing} ${data.text}` : data.text;
+            if (sampleSelect) {
+                sampleSelect.value = '';
+            }
             updateCharCount();
             complaintTextarea.focus();
         } else {
@@ -619,7 +884,8 @@ async function transcribeVoiceRecording(mimeType) {
         showError('Could not reach the transcription service.');
     } finally {
         isTranscribing = false;
+        isRecording = false;
         resetVoiceButton();
-        loadModelStatus();
+        enableButtons();
     }
 }
