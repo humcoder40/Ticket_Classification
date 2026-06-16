@@ -1,0 +1,115 @@
+================================================================================
+                    COMPLAINT CLASSIFICATION SYSTEM
+                         Complete Flow Diagram
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              USER INPUT                                     │
+│  Complaint Text + Target Selection (Product/Issue)                          │
+└────────────────────────────────────┬────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        TEXT PREPROCESSING                                   │
+│  Clean & Normalize Text                                                    │
+└────────────────────────────────────┬────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        FEATURE EXTRACTION                                    │
+│  ┌────────────────────────────┐  ┌────────────────────────────┐          │
+│  │ TF-IDF Vectorization       │  │ BERT Tokenization          │          │
+│  │ 80,000 features            │  │ 256 tokens                 │          │
+│  └────────────────────────────┘  └────────────────────────────┘          │
+└────────────────────────────────────┬────────────────────────────────────────┘
+                                     │
+                    ┌────────────────┴────────────────┐
+                    │                                   │
+                    ▼                                   ▼
+┌──────────────────────────────────┐  ┌──────────────────────────────────┐
+│  TF-IDF MODELS                   │  │  BERT MODEL                      │
+│                                  │  │                                  │
+│  ┌──────────────┐ ┌──────────────┐│  │  Transformer Layers            │
+│  │ Naive Bayes  │ │ Log. Reg.    ││  │  → Contextual Embeddings        │
+│  │ Conf: 0.65   │ │ Conf: 0.78   ││  │  → Classification Head          │
+│  └──────────────┘ └──────────────┘│  │                                  │
+│                                  │  │  Output:                         │
+│  ┌──────────────┐ ┌──────────────┐│  │  • Class: Credit card            │
+│  │ Rand. Forest│ │ SVM          ││  │  • Confidence: 0.82            │
+│  │ Conf: 0.72   │ │ Conf: 0.85 ⭐││  │  • Top 3 Predictions            │
+│  └──────────────┘ └──────────────┘│  │                                  │
+└──────────────────────────────────┘  └──────────────────────────────────┘
+                    │                                   │
+                    └───────────────┬───────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        RESULT AGGREGATION                                   │
+│  • Collect all predictions                                                 │
+│  • Calculate consensus (5/5 models agree)                                 │
+│  • Identify highest confidence (SVM: 0.85)                               │
+└────────────────────────────────────┬────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        WEB INTERFACE DISPLAY                                │
+│  Show all 5 model predictions with confidence scores                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+                    KEY FEATURES OF OUR APPROACH
+================================================================================
+
+✓ MULTI-MODEL ENSEMBLE
+  • Train 4-5 different models
+  • Each model has unique strengths
+  • Parallel execution for speed
+
+✓ CONFIDENCE-BASED SELECTION
+  • All models provide predictions
+  • Display confidence scores
+  • User can assess reliability
+
+✓ ROBUSTNESS
+  • No single point of failure
+  • Consensus indicates strong predictions
+  • Different models for different scenarios
+
+✓ TRANSPARENCY
+  • Users see all predictions
+  • Can compare model confidence
+  • Top 3 alternatives per model
+
+
+================================================================================
+                    WHY MULTIPLE MODELS?
+================================================================================
+
+Different models excel in different scenarios:
+
+• Simple Text          → Naive Bayes (Fast, Probabilistic)
+• Linear Patterns     → Logistic Regression (Interpretable)
+• Complex Patterns    → Random Forest (Non-linear, Robust)
+• High Accuracy       → SVM (Best with sparse data)
+• Context-Aware       → BERT (Semantic understanding)
+
+
+================================================================================
+                    MODEL PERFORMANCE
+================================================================================
+
+Product Classification:
+  Naive Bayes:        ~60% accuracy
+  Logistic Regression: ~71% accuracy
+  Random Forest:      ~66% accuracy
+  SVM:                ~72% accuracy ⭐
+  BERT:               ~75-80% accuracy
+
+Issue Classification:
+  Naive Bayes:        ~52% accuracy
+  Logistic Regression: ~70% accuracy
+  Random Forest:      ~66% accuracy
+  SVM:                ~72% accuracy ⭐
+  BERT:               ~75-80% accuracy
+

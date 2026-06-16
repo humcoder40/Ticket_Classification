@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complaint Classification System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="title">
+                    <span class="icon">📋</span>
+                    Complaint Classification System
+                </h1>
+                <p class="subtitle">AI-Powered Consumer Complaint Categorization</p>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Input Section -->
+            <section class="input-section">
+                <div class="card">
+                    <h2 class="card-title">
+                        <span class="card-icon">✍️</span>
+                        Enter Complaint Text
+                    </h2>
+                    <div class="input-group">
+                        <div class="target-selection">
+                            <label for="targetSelect" class="target-label">
+                                <span class="target-icon">🎯</span>
+                                Classification Type:
+                            </label>
+                            <select id="targetSelect" class="target-select">
+                                <option value="product">Product Classification</option>
+                                <option value="issue">Issue Classification</option>
+                            </select>
+                        </div>
+                        <textarea 
+                            id="complaintText" 
+                            class="text-input" 
+                            placeholder="Enter your complaint here... For example: 'I have been trying to resolve an issue with my credit card statement. The charges are incorrect and I have been charged fees that I should not have been charged.'"
+                            rows="6"
+                        ></textarea>
+                        <div class="input-footer">
+                            <span class="char-count">
+                                <span id="charCount">0</span> characters
+                            </span>
+                            <button id="voiceBtn" class="btn btn-voice" title="Record complaint with microphone (Groq Whisper)">
+                                Voice Input
+                            </button>
+                            <button id="clearBtn" class="btn btn-secondary">Clear</button>
+                            <button id="predictBtn" class="btn btn-primary">
+                                <span class="btn-icon">🔍</span>
+                                Analyze Complaint
+                            </button>
+                        </div>
+                        <!-- <div class="input-footer">
+                            <span class="char-count">
+                                <span id="charCount">0</span> characters
+                            </span>
+                            <button id="clearBtn" class="btn btn-secondary">Clear</button>
+                            <button id="predictBtn" class="btn btn-primary">
+                                <span class="btn-icon">🔍</span>
+                                Analyze Complaint
+                            </button>
+                        </div> -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Loading Indicator -->
+            <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+                <div class="spinner"></div>
+                <p>Analyzing complaint with all models (including BERT)...</p>
+            </div>
+
+            <!-- Results Section -->
+            <section id="resultsSection" class="results-section" style="display: none;">
+                <div class="results-header">
+                    <h2 class="results-title">
+                        <span class="card-icon">📊</span>
+                        Prediction Results
+                    </h2>
+                    <span id="timestamp" class="timestamp"></span>
+                </div>
+
+                <div id="ensembleSection" class="ensemble-section" style="display: none;">
+                    <div id="ensembleCard" class="ensemble-card">
+                        <!-- Final ensemble prediction rendered here -->
+                    </div>
+                </div>
+
+                <h3 class="individual-models-title">Individual Model Predictions</h3>
+                <div id="resultsContainer" class="results-container">
+                    <!-- Results will be dynamically inserted here -->
+                </div>
+            </section>
+
+            <!-- Model Status Section -->
+            <section class="status-section">
+                <div class="card">
+                    <h2 class="card-title">
+                        <span class="card-icon">⚙️</span>
+                        Model Status
+                    </h2>
+                    <div id="modelStatus" class="model-status">
+                        <div class="status-item">
+                            <span class="status-label">Loading models...</span>
+                            <span class="status-spinner"></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Complaint Classification System &copy; 2025 | Powered by Machine Learning</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
+

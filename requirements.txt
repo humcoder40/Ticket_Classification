@@ -1,0 +1,18 @@
+# Web app
+Flask==3.0.0
+Werkzeug==3.0.1
+
+# Data / classical ML (pins with pre-built wheels for Python 3.12+)
+scikit-learn==1.8.0
+pandas==3.0.2
+numpy==2.4.4
+
+# BERT inference (RTX 4070 — CUDA wheel, not CPU)
+# After install, verify: python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+--extra-index-url https://download.pytorch.org/whl/cu126
+torch==2.11.0+cu126
+transformers==5.5.0
+
+# Groq Whisper transcription (Option A: official Groq SDK)
+groq==1.1.2
+python-dotenv==1.0.1
